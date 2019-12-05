@@ -37,6 +37,13 @@ line options from each individual class.
 """
 Adapted by Ian Zurutuza
 
+Modifications:
+    - include replacement policies (default random)
+    - both d$ and i$ default size=64kB
+    - L2$ size default=512kB
+
+    Use bash script to replace
+
 for CSCE 5610
 3 Dec 2019
 """
@@ -52,24 +59,36 @@ m5.util.addToPath('../')
 
 from common import SimpleOpts
 
-# I added this mumbojumbo
-# see src/mem/cache/replacement_policies/ReplacementPolicies.py
+# Some specific options for caches
+# For all options see src/mem/cache/Cache.py
+
+
 replacement_policy_dict = {
-    'FIFO': FIFORP(),
-    'SecondChance': SecondChanceRP(),
-    'LFU': LFURP(),
-    'LRU': LRURP(),
-    'BIP': BIPRP(),
-    'MRU': MRURP(),
-    'Random': RandomRP(),
-    'BRRIP': BRRIPRP(),
-    'TreePLRU': TreePLRURP(),
+        'FIFO': FIFORP(),
+        'SecondChance': SecondChanceRP(),
+        'LFU': LFURP(),
+        'LRU': LRURP(),
+        'LIP': LIPRP(),
+        'BIP': BIPRP(),
+        'MRU': MRURP(),
+        'NRU': NRURP(),
+        'RRIP': RRIPRP(),
+        'Random': RandomRP(),
+        'BRRIP': BRRIPRP(),
+        'TreePLRU': TreePLRURP(),
     }
 
-# Some specific options for caches
-# For all options see src/mem/cache/BaseCache.py
+# I added this mumbojumbo
+# see src/mem/cache/replacement_policies/ReplacementPolicies.py
+# it looks like several strategies of these are modification another strategy
+class myBaseCache(Cache):
+    """sets replacement policy, seems to work this way"""
 
-class L1Cache(Cache):
+    replacement_policy = \
+        replacement_policy_dict['Replace-this-from-bash-script-lol']
+
+
+class L1Cache(myBaseCache):
     """Simple L1 Cache with default values"""
 
     assoc = 2
@@ -79,18 +98,8 @@ class L1Cache(Cache):
     mshrs = 4
     tgts_per_mshr = 20
 
-    # default is random
-    replacement_policy = replacement_policy_dict['Random']
-
-    # added a command line flag (now we can set from a bash script!)
-    SimpleOpts.add_option('--l1_rp',
-        help="L1 replacement policy. Default: %s" % str(replacement_policy))
-
     def __init__(self, opts=None):
         super(L1Cache, self).__init__()
-        if not opts or not opts.l1_rp:
-            return
-        self.replacement_policy = replacement_policy_dict[opts.l1_rp]
         pass
 
     def connectBus(self, bus):
@@ -109,7 +118,7 @@ class L1ICache(L1Cache):
     size = '64kB'
 
     SimpleOpts.add_option('--l1i_size',
-                          help="L1 instruction cache size. Default: %s" % size)
+        help="L1i instruction cache size. Default: %s" % size)
 
     def __init__(self, opts=None):
         super(L1ICache, self).__init__(opts)
@@ -132,15 +141,14 @@ class L1DCache(L1Cache):
 
     def __init__(self, opts=None):
         super(L1DCache, self).__init__(opts)
-        if not opts or not opts.l1d_size:
-            return
-        self.size = opts.l1d_size
+        if opts.l1d_size:
+            self.size = opts.l1d_size
 
     def connectCPU(self, cpu):
         """Connect this cache's port to a CPU dcache port"""
         self.cpu_side = cpu.dcache_port
 
-class L2Cache(Cache):
+class L2Cache(myBaseCache):
     """Simple L2 Cache with default values"""
 
     # Default parameters
@@ -152,22 +160,13 @@ class L2Cache(Cache):
     mshrs = 20
     tgts_per_mshr = 12
 
-    # default is random
-    replacement_policy = replacement_policy_dict['Random']
-
     SimpleOpts.add_option('--l2_size',
         help="L2 cache size. Default: %s" % size)
-
-    # added a command line flag (now we can set from a bash script!)
-    SimpleOpts.add_option('--l2_rp',
-        help="L2 replacement policy. Default: %s" % str(replacement_policy))
 
     def __init__(self, opts=None):
         super(L2Cache, self).__init__()
         if opts.l2_size:
             self.size = opts.l2_size
-        if opts.l2_rp:
-            self.replacement_policy = replacement_policy_dict[opts.l2_rp]
 
     def connectCPUSideBus(self, bus):
         self.cpu_side = bus.master

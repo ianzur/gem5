@@ -40,8 +40,20 @@ IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
 
 """
 
-from __future__ import print_function
-from __future__ import absolute_import
+"""
+Adapted by Ian Zurutuza
+
+Modifications
+
+    - 8GB of RAM
+    -
+    - Todo: add options param for binary inputs
+
+
+for CSCE 5610
+3 Dec 2019
+"""
+
 
 # import the m5 (gem5) library created when gem5 is built
 import m5
@@ -51,46 +63,53 @@ from m5.objects import *
 # Add the common scripts to our path
 m5.util.addToPath('../')
 
-# import the caches which we made
-from caches import *
+# import the caches which we made with a replacement policy specified...
+# there has got to be a better way to do this...
+from caches_tmp import *
 
 # import the SimpleOpts module
 from common import SimpleOpts
 
+# handle options for binary
+SimpleOpts.add_option('--o',
+        help="options required for binary (put inside some \" \")")
+
+SimpleOpts.add_option('--RP',
+        help="options required for binary (put inside some \" \")")
+
 # Set the usage message to display
-SimpleOpts.set_usage("usage: %prog [options] <binary to execute>")
+SimpleOpts.set_usage(
+    "usage: %prog [options] <binary to execute> <options to pass to binary> "
+    )
 
 # Finalize the arguments and grab the opts so we can pass it on to our objects
 (opts, args) = SimpleOpts.parse_args()
 
+print(opts)
+print(type(opts.o))
+
 # get ISA for the default binary to run. This is mostly for simple testing
 isa = str(m5.defines.buildEnv['TARGET_ISA']).lower()
 
-# Default to running 'hello', use the compiled ISA to find the binary
-# grab the specific path to the binary
-thispath = os.path.dirname(os.path.realpath(__file__))
-binary = os.path.join(thispath, '../../',
-                      'tests/test-progs/hello/bin/', isa, 'linux/hello')
-
 # Check if there was a binary passed in via the command line and error if
 # there are too many arguments
-if len(args) == 1:
+if len(args) > 0:
     binary = args[0]
-elif len(args) > 1:
-    SimpleOpts.print_help()
-    m5.fatal("Expected a binary to execute as positional argument")
+else:
+    raise EnvironmentError('need a binary to run')
+
 
 # create the system we are going to simulate
 system = System()
 
 # Set the clock fequency of the system (and all of its children)
 system.clk_domain = SrcClockDomain()
-system.clk_domain.clock = '1GHz'
+system.clk_domain.clock = '2.2GHz'
 system.clk_domain.voltage_domain = VoltageDomain()
 
 # Set up the system
 system.mem_mode = 'timing'               # Use timing accesses
-system.mem_ranges = [AddrRange('512MB')] # Create an address range
+system.mem_ranges = [AddrRange('16GB')] # Create an address range
 
 # Create a simple CPU
 system.cpu = TimingSimpleCPU()
@@ -98,6 +117,7 @@ system.cpu = TimingSimpleCPU()
 # Create an L1 instruction and data cache
 system.cpu.icache = L1ICache(opts)
 system.cpu.dcache = L1DCache(opts)
+
 
 # Connect the instruction and data caches to the CPU
 system.cpu.icache.connectCPU(system.cpu)
@@ -140,9 +160,15 @@ system.mem_ctrl.port = system.membus.master
 
 # Create a process for a simple "Hello World" application
 process = Process()
+
 # Set the command
 # cmd is a list which begins with the executable (like argv)
-process.cmd = [binary]
+# Handle --o (options required for binary)
+if opts.o:
+    process.cmd = [binary] + opts.o.split(' ')
+else:
+    process.cmd = [binary]
+
 # Set the cpu to use the process as its workload and create thread contexts
 system.cpu.workload = process
 system.cpu.createThreads()
